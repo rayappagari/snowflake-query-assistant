@@ -3,22 +3,17 @@ from dotenv import load_dotenv
 # Must run before any agent/db imports — clients initialise at import time.
 load_dotenv()
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agents.orchestrator import answer_question_full
 
 app = FastAPI(title="Snowflake Query Assistant")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_methods=["POST", "GET"],
-    allow_headers=["*"],
-)
 
 
 class QueryRequest(BaseModel):
@@ -48,3 +43,13 @@ def query(req: QueryRequest) -> QueryResponse:
         row_count=result.row_count,
         error=result.error,
     )
+
+
+# Serve React frontend — must come after API routes
+_dist = Path(__file__).parent.parent / "frontend" / "dist"
+if _dist.exists():
+    app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_spa(full_path: str) -> FileResponse:
+        return FileResponse(_dist / "index.html")
