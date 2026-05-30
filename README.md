@@ -2,13 +2,36 @@
 
 Ask questions about your Snowflake data in plain English. A multi-agent pipeline powered by Claude translates your question into SQL, runs it, and returns a plain-language answer — with the raw results and generated SQL available in the UI.
 
-## How it works
+## Architecture
 
-```
-Question → schema filter → SQL generation → EXPLAIN validation → execution → plain-language answer
+```mermaid
+flowchart TD
+    User(["🧑 User question"])
+
+    subgraph Agents ["Multi-Agent Pipeline"]
+        direction TB
+        A["🔍 Schema Agent\n─────────────\nFilters INFORMATION_SCHEMA\nto relevant tables\n(Claude Haiku)"]
+        B["✍️ SQL Gen Agent\n─────────────\nGenerates SELECT query\n(Claude Opus 4.8)"]
+        C{"🔎 Validator\n─────────────\nSnowflake EXPLAIN\n(no credits used)"}
+        D["⚙️ Executor\n─────────────\nRuns query against\nSnowflake"]
+        E["💬 Interpreter Agent\n─────────────\nPlain-language summary\n(Claude Opus 4.8)"]
+        F["🛠️ Error Recovery Agent\n─────────────\nRewrite SQL from\nexecution error\n(Claude Opus 4.8)"]
+    end
+
+    Result(["✅ Answer + SQL + Results"])
+
+    User --> A
+    A --> B
+    B --> C
+    C -- valid --> D
+    C -- "invalid (retry, max 3)" --> B
+    D -- success --> E
+    D -- "error (retry, max 3)" --> F
+    F --> B
+    E --> Result
 ```
 
-Each stage is a Claude agent:
+Each stage is a plain function call — no framework, no message bus, no async.
 
 | Agent | Model | Role |
 |---|---|---|
@@ -17,8 +40,6 @@ Each stage is a Claude agent:
 | Validator | Snowflake EXPLAIN | Checks syntax/semantics without running the query |
 | Error Recovery | Opus 4.8 | Rewrites SQL when execution fails |
 | Interpreter | Opus 4.8 | Summarises results in plain language |
-
-On validation failure the orchestrator retries with the error appended (up to 3 attempts).
 
 ## Stack
 
