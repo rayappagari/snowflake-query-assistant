@@ -64,16 +64,14 @@ ACCESS_TOKEN_EXPIRE_HOURS = int(os.environ.get("JWT_EXPIRE_HOURS", "8"))
 
 def hash_password(plain: str) -> str:
     """Hash *plain* with bcrypt and return the digest string."""
-    from passlib.context import CryptContext  # noqa: PLC0415
-    _ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    return _ctx.hash(plain)
+    import bcrypt  # noqa: PLC0415
+    return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Return True if *plain* matches *hashed*."""
-    from passlib.context import CryptContext  # noqa: PLC0415
-    _ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    return _ctx.verify(plain, hashed)
+    import bcrypt  # noqa: PLC0415
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────
