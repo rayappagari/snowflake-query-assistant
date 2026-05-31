@@ -1,6 +1,16 @@
+"""
+Results interpretation agent.
+
+Summarises Snowflake query results as a plain-language answer using Claude.
+The `model` parameter mirrors the one used in sql_gen so routing is consistent
+across the full pipeline.
+"""
+
 from typing import Any
 
 import anthropic
+
+from agents.router import OPUS
 
 _client = anthropic.Anthropic()
 
@@ -21,7 +31,16 @@ def interpret_results(
     sql: str,
     results: list[dict[str, Any]],
     history: list[dict] | None = None,
+    model: str = OPUS,
 ) -> str:
+    """
+    Produce a plain-language summary of `results`.
+
+    Parameters
+    ----------
+    history     Last N conversation turns; helps the model reference prior answers.
+    model       Claude model ID from agents.router.
+    """
     if not results:
         return "The query returned no results."
 
@@ -48,7 +67,7 @@ def interpret_results(
     )
 
     response = _client.messages.create(
-        model="claude-opus-4-8",
+        model=model,
         max_tokens=1024,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},

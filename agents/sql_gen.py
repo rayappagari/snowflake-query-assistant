@@ -1,4 +1,19 @@
+"""
+SQL generation agent.
+
+Converts a natural-language question + schema context into a valid Snowflake
+SELECT query using Claude.
+
+The `model` parameter is set by agents/router.py — simple questions use Haiku,
+complex analytical questions use Opus 4.8.
+
+The system prompt carries cache_control so it is reused across calls within
+the 5-minute Anthropic prompt-cache TTL window.
+"""
+
 import anthropic
+
+from agents.router import OPUS
 
 _client = anthropic.Anthropic()
 
@@ -27,26 +42,34 @@ def generate_sql(
     schema: str,
     previous_error: str | None = None,
     history: list[dict] | None = None,
+    model: str = OPUS,
 ) -> str:
     """
-    Generate a Snowflake SQL query for the given question and schema context.
-    Pass previous_error to ask the model to fix a prior attempt.
-    Pass history for conversation context so follow-up questions resolve correctly.
+    Generate a Snowflake SQL query for `question` given `schema`.
+
+    Parameters
+    ----------
+    previous_error  Error from the last attempt; appended so the model can fix it.
+    history         Last N conversation turns for follow-up question resolution.
+    model           Claude model ID from agents.router (Haiku or Opus).
     """
     user_content = f"Schema:\n{schema}\n\n"
 
     if history:
-        user_content += f"Conversation history (use for context on follow-up questions):\n{_format_history(history)}\n\n"
+        user_content += (
+            f"Conversation history (use for context on follow-up questions):\n"
+            f"{_format_history(history)}\n\n"
+        )
 
     user_content += f"Question: {question}"
 
     if previous_error:
         user_content += (
-            f"\n\nPrevious attempt failed with this error — please fix it:\n{previous_error}"
+            f"\n\nPrevious attempt failed — please fix:\n{previous_error}"
         )
 
     response = _client.messages.create(
-        model="claude-opus-4-8",
+        model=model,
         max_tokens=2048,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},

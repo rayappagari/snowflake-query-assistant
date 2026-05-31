@@ -1,16 +1,45 @@
+"""
+Audit logger.
+
+Persists every query to a file-based SQLite database (WAL mode for safe
+concurrent writes from multiple uvicorn workers) and streams a JSON record to
+stdout so Railway / any log aggregator captures it permanently.
+
+SQLite file path: AUDIT_DB_PATH env var (default: /tmp/audit.db).
+In-process the file survives restarts within a Railway deployment; for true
+persistence across deploys attach a Railway volume and point AUDIT_DB_PATH at it.
+
+Schema
+------
+id             Auto-incremented primary key
+ts             ISO-8601 UTC timestamp
+question       Original natural-language question
+sql_generated  Final SQL sent to Snowflake (null on early failures)
+success        1 = result returned, 0 = error
+row_count      Rows returned (null on failure)
+latency_ms     Wall-clock time for the full pipeline (ms)
+cache_hit      1 = result served from cache, 0 = Snowflake was queried
+pii_detected   Comma-separated PII type names found in results (empty string if none)
+error_message  Error detail when success = 0
+"""
+
 import json
 import logging
+import os
 import sqlite3
 import threading
 from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
+_DB_PATH = os.environ.get("AUDIT_DB_PATH", "/tmp/audit.db")
 _lock = threading.Lock()
-_conn = sqlite3.connect(":memory:", check_same_thread=False)
+_conn = sqlite3.connect(_DB_PATH, check_same_thread=False)
 
 
 def _init() -> None:
+    _conn.execute("PRAGMA journal_mode=WAL")
+    _conn.execute("PRAGMA synchronous=NORMAL")
     with _conn:
         _conn.execute("""
             CREATE TABLE IF NOT EXISTS audit_log (
@@ -21,6 +50,8 @@ def _init() -> None:
                 success       INTEGER NOT NULL,
                 row_count     INTEGER,
                 latency_ms    INTEGER,
+                cache_hit     INTEGER NOT NULL DEFAULT 0,
+                pii_detected  TEXT    NOT NULL DEFAULT '',
                 error_message TEXT
             )
         """)
@@ -35,20 +66,27 @@ def record(
     success: bool,
     row_count: int | None = None,
     latency_ms: int | None = None,
+    cache_hit: bool = False,
+    pii_detected: list[str] | None = None,
     error: str | None = None,
 ) -> None:
+    """Insert one audit record and stream it to stdout as structured JSON."""
     ts = datetime.now(timezone.utc).isoformat()
+    pii_str = ",".join(pii_detected) if pii_detected else ""
+
     with _lock:
         with _conn:
             _conn.execute(
                 """
                 INSERT INTO audit_log
-                    (ts, question, sql_generated, success, row_count, latency_ms, error_message)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (ts, question, sql_generated, success, row_count,
+                     latency_ms, cache_hit, pii_detected, error_message)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (ts, question, sql, int(success), row_count, latency_ms, error),
+                (ts, question, sql, int(success), row_count,
+                 latency_ms, int(cache_hit), pii_str, error),
             )
-    # Stream to stdout so Railway captures it permanently
+
     logger.info(json.dumps({
         "event": "query",
         "ts": ts,
@@ -56,15 +94,19 @@ def record(
         "success": success,
         "row_count": row_count,
         "latency_ms": latency_ms,
+        "cache_hit": cache_hit,
+        "pii_detected": pii_detected or [],
         "error": error,
     }))
 
 
 def recent(limit: int = 100) -> list[dict]:
+    """Return the most recent `limit` audit entries, newest first."""
     with _lock:
         cur = _conn.execute(
             """
-            SELECT id, ts, question, sql_generated, success, row_count, latency_ms, error_message
+            SELECT id, ts, question, sql_generated, success,
+                   row_count, latency_ms, cache_hit, pii_detected, error_message
             FROM audit_log
             ORDER BY id DESC
             LIMIT ?
@@ -73,6 +115,10 @@ def recent(limit: int = 100) -> list[dict]:
         )
         cols = [d[0] for d in cur.description]
         rows = [dict(zip(cols, row)) for row in cur.fetchall()]
+
     for r in rows:
         r["success"] = bool(r["success"])
+        r["cache_hit"] = bool(r["cache_hit"])
+        r["pii_detected"] = r["pii_detected"].split(",") if r["pii_detected"] else []
+
     return rows

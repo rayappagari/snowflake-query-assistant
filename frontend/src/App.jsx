@@ -115,10 +115,18 @@ function UserMessage({ text }) {
 }
 
 function AssistantMessage({ data }) {
-  const { answer, sql, rows, row_count, error } = data
+  const { answer, sql, rows, row_count, error, cache_hit, pii_detected } = data
   return (
     <div className="assistant-card msg-in">
+      <div className="answer-header">
+        {cache_hit && <span className="badge badge--cache">⚡ cached</span>}
+      </div>
       <p className="answer">{error ? `⚠ ${error}` : answer}</p>
+      {pii_detected && pii_detected.length > 0 && (
+        <div className="pii-warning">
+          ⚠ Results may contain PII: {pii_detected.join(', ')}
+        </div>
+      )}
       {sql && <SqlBlock sql={sql} />}
       {rows && rows.length > 0 && <ResultsTable rows={rows} rowCount={row_count} />}
     </div>
