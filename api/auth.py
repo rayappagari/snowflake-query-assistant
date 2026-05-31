@@ -345,6 +345,81 @@ def register(
     return {"username": user["username"], "role": user["role"], "email": user.get("email")}
 
 
+@router.get("/users")
+def list_users(authorization: str | None = Header(default=None)) -> list[dict]:
+    """Return all users. Admin only."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+    caller = decode_token(authorization.split(" ", 1)[1])
+    if caller.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    if not postgres.is_available():
+        raise HTTPException(status_code=503, detail="User database not available")
+    rows = postgres.query(
+        "SELECT id, username, email, role, is_active, created_at FROM users ORDER BY created_at DESC"
+    )
+    return [
+        {
+            "id": r["id"],
+            "username": r["username"],
+            "email": r.get("email"),
+            "role": r["role"],
+            "is_active": r["is_active"],
+            "created_at": str(r.get("created_at", "")),
+        }
+        for r in (rows or [])
+    ]
+
+
+@router.patch("/users/{username}")
+def update_user(
+    username: str,
+    body: dict,
+    authorization: str | None = Header(default=None),
+) -> dict:
+    """Update a user's role or active status. Admin only."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+    caller = decode_token(authorization.split(" ", 1)[1])
+    if caller.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    if caller.get("sub") == username and "is_active" in body and not body["is_active"]:
+        raise HTTPException(status_code=400, detail="Cannot deactivate your own account")
+    if not postgres.is_available():
+        raise HTTPException(status_code=503, detail="User database not available")
+
+    updates, params = [], []
+    if "role" in body:
+        updates.append("role = %s"); params.append(body["role"])
+    if "is_active" in body:
+        updates.append("is_active = %s"); params.append(body["is_active"])
+    if "password" in body:
+        updates.append("hashed_password = %s"); params.append(hash_password(body["password"]))
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    params.append(username)
+    postgres.query(f"UPDATE users SET {', '.join(updates)} WHERE username = %s", tuple(params))
+    return get_user(username) or {}
+
+
+@router.delete("/users/{username}", status_code=204)
+def delete_user(
+    username: str,
+    authorization: str | None = Header(default=None),
+) -> None:
+    """Delete a user permanently. Admin only. Cannot delete yourself."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization required")
+    caller = decode_token(authorization.split(" ", 1)[1])
+    if caller.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    if caller.get("sub") == username:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    if not postgres.is_available():
+        raise HTTPException(status_code=503, detail="User database not available")
+    postgres.query("DELETE FROM users WHERE username = %s", (username,))
+
+
 @router.get("/me")
 def me(authorization: str | None = Header(default=None)) -> dict:
     """Return the current user's profile."""

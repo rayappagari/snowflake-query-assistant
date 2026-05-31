@@ -14,7 +14,11 @@
       "PowerShell(winget install *)",
       "PowerShell(gh *)",
       "PowerShell(Get-ChildItem *)",
-      "Bash(railway service *)"
+      "Bash(railway service *)",
+      "Bash(railway logs *)",
+      "Bash(railway up *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

@@ -240,6 +240,193 @@ function ThemePanel({ current, onChange, onClose }) {
   )
 }
 
+// ── User management modal ─────────────────────────────────────────────────────
+function UserManagement({ token, currentUser, onClose }) {
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [newUser, setNewUser] = useState({ username: '', password: '', email: '', role: 'user' })
+  const [saving, setSaving] = useState(false)
+  const [resetTarget, setResetTarget] = useState(null)
+  const [resetPw, setResetPw] = useState('')
+
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
+
+  async function loadUsers() {
+    setLoading(true)
+    try {
+      const res = await fetch('/auth/users', { headers })
+      if (res.ok) setUsers(await res.json())
+      else setError('Failed to load users')
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { loadUsers() }, [])
+
+  async function addUser(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const res = await fetch('/auth/register', {
+        method: 'POST', headers,
+        body: JSON.stringify(newUser),
+      })
+      if (res.ok) {
+        setNewUser({ username: '', password: '', email: '', role: 'user' })
+        setAdding(false)
+        loadUsers()
+      } else {
+        const d = await res.json()
+        setError(d.detail || 'Failed to add user')
+      }
+    } finally { setSaving(false) }
+  }
+
+  async function toggleActive(username, current) {
+    await fetch(`/auth/users/${username}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ is_active: !current }),
+    })
+    loadUsers()
+  }
+
+  async function changeRole(username, role) {
+    await fetch(`/auth/users/${username}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ role }),
+    })
+    loadUsers()
+  }
+
+  async function deleteUser(username) {
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return
+    await fetch(`/auth/users/${username}`, { method: 'DELETE', headers })
+    loadUsers()
+  }
+
+  async function resetPassword(e) {
+    e.preventDefault()
+    await fetch(`/auth/users/${resetTarget}`, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ password: resetPw }),
+    })
+    setResetTarget(null)
+    setResetPw('')
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2 className="modal-title">User Management</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+
+        {error && <div className="modal-error">{error}<button onClick={() => setError('')}>✕</button></div>}
+
+        <div className="modal-body">
+          {loading ? (
+            <p className="modal-empty">Loading…</p>
+          ) : (
+            <table className="user-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.username} className={u.is_active ? '' : 'user-row--inactive'}>
+                    <td className="user-name">
+                      {u.username}
+                      {u.username === currentUser?.username && <span className="user-you">you</span>}
+                    </td>
+                    <td className="user-email">{u.email || '—'}</td>
+                    <td>
+                      <select
+                        className="role-select"
+                        value={u.role}
+                        disabled={u.username === currentUser?.username}
+                        onChange={ev => changeRole(u.username, ev.target.value)}
+                      >
+                        <option value="user">user</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        className={`status-btn ${u.is_active ? 'status-btn--active' : 'status-btn--inactive'}`}
+                        disabled={u.username === currentUser?.username}
+                        onClick={() => toggleActive(u.username, u.is_active)}
+                      >
+                        {u.is_active ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td className="user-date">{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td className="user-actions">
+                      <button className="action-btn" title="Reset password" onClick={() => { setResetTarget(u.username); setResetPw('') }}>🔑</button>
+                      {u.username !== currentUser?.username && (
+                        <button className="action-btn action-btn--danger" title="Delete user" onClick={() => deleteUser(u.username)}>🗑</button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {resetTarget && (
+            <form className="reset-form" onSubmit={resetPassword}>
+              <span className="reset-label">Reset password for <strong>{resetTarget}</strong></span>
+              <input
+                type="password"
+                className="gate-input"
+                placeholder="New password"
+                value={resetPw}
+                onChange={e => setResetPw(e.target.value)}
+                autoFocus
+              />
+              <div className="reset-actions">
+                <button className="gate-btn" type="submit" disabled={!resetPw}>Save</button>
+                <button className="clear-btn" type="button" onClick={() => setResetTarget(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
+
+          {adding ? (
+            <form className="add-user-form" onSubmit={addUser}>
+              <h3 className="add-user-title">Add user</h3>
+              <div className="add-user-fields">
+                <input className="gate-input" placeholder="Username *" required value={newUser.username} onChange={e => setNewUser(p => ({ ...p, username: e.target.value }))} />
+                <input className="gate-input" placeholder="Password *" type="password" required value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} />
+                <input className="gate-input" placeholder="Email (optional)" type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} />
+                <select className="role-select role-select--add" value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
+                  <option value="user">user</option>
+                  <option value="admin">admin</option>
+                </select>
+              </div>
+              <div className="add-user-actions">
+                <button className="gate-btn" type="submit" disabled={saving}>
+                  {saving ? 'Adding…' : 'Add user'}
+                </button>
+                <button className="clear-btn" type="button" onClick={() => setAdding(false)}>Cancel</button>
+              </div>
+            </form>
+          ) : (
+            <button className="add-user-btn" onClick={() => setAdding(true)}>+ Add user</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Auth mode detection ───────────────────────────────────────────────────────
 // Cached promise so we only hit /auth/mode once per page load.
 let _authModePromise = null
@@ -388,6 +575,7 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [usersOpen, setUsersOpen] = useState(false)
   const [history, setHistory] = useState([])          // sidebar display history
   const [convHistory, setConvHistory] = useState([])  // API conversation memory
   const [toast, setToast] = useState(null)
@@ -556,6 +744,11 @@ export default function App() {
               New chat
             </button>
           )}
+          {currentUser?.role === 'admin' && (
+            <button className="users-btn" onClick={() => setUsersOpen(true)} title="Manage users">
+              👥 Users
+            </button>
+          )}
           {currentUser && (
             <div className="user-chip">
               <span className="user-chip__name">{currentUser.username}</span>
@@ -636,6 +829,14 @@ export default function App() {
       </div>
 
       {toast && <Toast message={toast} />}
+
+      {usersOpen && authMode === 'jwt' && (
+        <UserManagement
+          token={token}
+          currentUser={currentUser}
+          onClose={() => setUsersOpen(false)}
+        />
+      )}
     </div>
   )
 }
