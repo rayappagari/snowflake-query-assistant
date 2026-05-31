@@ -3,10 +3,11 @@ from dotenv import load_dotenv
 # Must run before any agent/db imports — clients initialise at import time.
 load_dotenv()
 
+import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -14,6 +15,13 @@ from pydantic import BaseModel
 from agents.orchestrator import answer_question_full
 
 app = FastAPI(title="Snowflake Query Assistant")
+
+_APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+
+def _check_password(x_app_password: str | None) -> None:
+    if _APP_PASSWORD and x_app_password != _APP_PASSWORD:
+        raise HTTPException(status_code=401, detail="Incorrect password")
 
 
 class QueryRequest(BaseModel):
@@ -34,7 +42,8 @@ def health() -> dict:
 
 
 @app.post("/query", response_model=QueryResponse)
-def query(req: QueryRequest) -> QueryResponse:
+def query(req: QueryRequest, x_app_password: str | None = Header(default=None)) -> QueryResponse:
+    _check_password(x_app_password)
     result = answer_question_full(req.question)
     return QueryResponse(
         answer=result.answer,

@@ -54,7 +54,50 @@ function AssistantMessage({ data }) {
   )
 }
 
+function PasswordGate({ onUnlock }) {
+  const [value, setValue] = useState('')
+  const [error, setError] = useState(false)
+  const inputRef = useRef(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  async function submit(e) {
+    e.preventDefault()
+    const res = await fetch('/health', { headers: { 'X-App-Password': value } })
+    if (res.ok) {
+      onUnlock(value)
+    } else {
+      setError(true)
+      setValue('')
+      inputRef.current?.focus()
+    }
+  }
+
+  return (
+    <div className="gate-wrap">
+      <form className="gate-card" onSubmit={submit}>
+        <span className="gate-logo">❄</span>
+        <h1 className="gate-title">Snowflake Query Assistant</h1>
+        <p className="gate-subtitle">Enter the password to continue</p>
+        <input
+          ref={inputRef}
+          type="password"
+          className={`gate-input${error ? ' gate-input--error' : ''}`}
+          placeholder="Password"
+          value={value}
+          onChange={e => { setValue(e.target.value); setError(false) }}
+        />
+        {error && <p className="gate-error">Incorrect password</p>}
+        <button className="gate-btn" type="submit" disabled={!value}>
+          Continue
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export default function App() {
+  const [password, setPassword] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -63,6 +106,8 @@ export default function App() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  if (!password) return <PasswordGate onUnlock={setPassword} />
 
   async function send() {
     const q = input.trim()
@@ -73,9 +118,16 @@ export default function App() {
     try {
       const res = await fetch('/query', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Password': password,
+        },
         body: JSON.stringify({ question: q }),
       })
+      if (res.status === 401) {
+        setPassword(null)
+        return
+      }
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', data }])
