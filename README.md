@@ -3,6 +3,7 @@
 Ask questions about your Snowflake data in plain English. A multi-agent pipeline powered by Claude translates your question into SQL, runs it against Snowflake, and returns a plain-language answer — with syntax-highlighted SQL, a scrollable results table, and CSV export.
 
 **Live demo:** https://laudable-clarity-production.up.railway.app
+**Client overview:** [PRODUCT.md](PRODUCT.md)
 
 ---
 
@@ -17,10 +18,11 @@ Ask questions about your Snowflake data in plain English. A multi-agent pipeline
 | **Syntax-highlighted SQL** | Collapsible SQL block with highlight.js |
 | **CSV export** | Download any result table in one click |
 | **Query history** | Sidebar tracks every question in the session |
-| **Audit log** | Every query logged with status, latency, row count, cache hit, and PII flags |
+| **Audit log** | Every query logged with status, latency, row count, cache hit, and PII flags — viewable in sidebar |
 | **Read-only enforcement** | Only `SELECT`/`WITH` queries reach Snowflake — writes blocked at the validator |
 | **PII detection** | Results scanned for email, SSN, phone, credit card — warning shown in UI |
-| **JWT authentication** | Individual user accounts with bcrypt passwords and JWT tokens (requires PostgreSQL) |
+| **JWT authentication** | Individual user accounts with bcrypt passwords and JWT tokens (PostgreSQL-backed) |
+| **User management UI** | Admin panel to add, edit, activate/deactivate, reset passwords, and delete users |
 | **Password fallback** | Shared `APP_PASSWORD` gate when PostgreSQL is not configured |
 | **Rate limiting** | 20 req/min/IP sliding window; Redis-backed when available |
 | **Circuit breaker** | Stops hammering Snowflake after 5 consecutive failures; auto-recovers |
@@ -93,8 +95,9 @@ Each stage is a plain synchronous function call — no framework, no message bus
 
 - **Backend** — Python 3.11, FastAPI, `snowflake-connector-python`, Anthropic SDK
 - **Frontend** — React 18, Vite, highlight.js
-- **Auth** — python-jose (JWT), passlib/bcrypt, PostgreSQL user store
-- **Observability** — Prometheus client, file-based SQLite + PostgreSQL audit log
+- **Auth** — python-jose (JWT), bcrypt, PostgreSQL user store
+- **Cache** — Redis (cross-worker) + in-process TTL fallback
+- **Observability** — Prometheus client, PostgreSQL + SQLite audit log
 - **Deployment** — Railway (Dockerfile: Node builds React, Python serves via FastAPI, 2 workers)
 
 ---
@@ -135,7 +138,7 @@ Copy `.env.example` to `.env`. Required variables are marked *.
 
 ### Core (required)
 ```
-ANTHROPIC_API_KEY=sk-ant-...        *
+ANTHROPIC_API_KEY=sk-ant-...          *
 SNOWFLAKE_ACCOUNT=org-account.region  *
 SNOWFLAKE_USER=your_username          *
 SNOWFLAKE_PASSWORD=your_password      *
@@ -148,40 +151,40 @@ SNOWFLAKE_SCHEMA=PUBLIC               # optional, defaults to PUBLIC
 ```
 APP_PASSWORD=your_password            # simple password gate (no DB needed)
 
-# JWT mode — activate by setting DATABASE_URL
-JWT_SECRET_KEY=<openssl rand -hex 32> # required in production; random default invalidates on restart
+# JWT mode — activated automatically when DATABASE_URL is set
+JWT_SECRET_KEY=<openssl rand -hex 32> # required in prod; random default invalidates on restart
 JWT_EXPIRE_HOURS=8
-ADMIN_USERNAME=admin                  # auto-created on first startup
+ADMIN_USERNAME=admin                  # auto-created admin on first startup
 ADMIN_PASSWORD=strong-password
 ```
 
-### PostgreSQL (enables JWT auth + persistent audit log)
+### PostgreSQL (enables JWT auth + user management + persistent audit log)
 ```
 DATABASE_URL=postgresql://user:pass@host:5432/dbname
-# On Railway: add a PostgreSQL service — this is set automatically
+# On Railway: add a PostgreSQL service — URL is injected automatically
 ```
 
 ### Redis (enables cross-worker shared cache + rate limiting)
 ```
 REDIS_URL=redis://localhost:6379
-# On Railway: add a Redis service — this is set automatically
+# On Railway: add a Redis service — URL is injected automatically
 ```
 
 ### Performance
 ```
-SNOWFLAKE_POOL_SIZE=5
-SNOWFLAKE_ACQUIRE_TIMEOUT=30
-QUERY_TIMEOUT_SECONDS=120
-RESULT_CACHE_TTL=300
-RESULT_CACHE_MAX=200
-RATE_LIMIT_RPM=20
+SNOWFLAKE_POOL_SIZE=5           # persistent Snowflake connections
+SNOWFLAKE_ACQUIRE_TIMEOUT=30    # seconds to wait for a pool slot
+QUERY_TIMEOUT_SECONDS=120       # Snowflake network timeout
+RESULT_CACHE_TTL=300            # seconds to cache identical SQL results
+RESULT_CACHE_MAX=200            # max cached entries (evicts oldest)
+RATE_LIMIT_RPM=20               # max requests per minute per IP
 ```
 
 ### Governance
 ```
-AUDIT_DB_PATH=/tmp/audit.db
-CB_FAILURE_THRESHOLD=5
-CB_RECOVERY_TIMEOUT=60
+AUDIT_DB_PATH=/tmp/audit.db     # SQLite fallback audit DB path
+CB_FAILURE_THRESHOLD=5          # failures before circuit opens
+CB_RECOVERY_TIMEOUT=60          # seconds before recovery probe
 ```
 
 ### Secrets manager (optional)
@@ -196,26 +199,47 @@ VAULT_TOKEN=s.xxxxxx
 ## Deploying to Railway
 
 1. Push to GitHub
-2. Railway → New Project → Deploy from GitHub repo → select this repo
-3. Set the required environment variables in Railway dashboard
+2. Railway → New Project → Deploy from GitHub repo
+3. Set required environment variables in the Railway dashboard
 4. Railway auto-detects the `Dockerfile` — no extra config needed
 5. Settings → Networking → Generate Domain for a public URL
 
-**To enable JWT auth:**
-1. Railway dashboard → New Service → Database → PostgreSQL
-2. `DATABASE_URL` is injected automatically
-3. Set `JWT_SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`
-4. Redeploy — admin user is created on first startup
+**Enable JWT auth + user management:**
+```
+Railway dashboard → New Service → Database → PostgreSQL
+```
+`DATABASE_URL` is injected automatically. Set `JWT_SECRET_KEY`, `ADMIN_USERNAME`, `ADMIN_PASSWORD` and redeploy — the admin account is created on first startup.
 
-**To enable Redis-backed cache + rate limiting:**
-1. Railway dashboard → New Service → Database → Redis
-2. `REDIS_URL` is injected automatically — redeploy and it activates
+**Enable Redis-backed cache + rate limiting:**
+```
+Railway dashboard → New Service → Database → Redis
+```
+`REDIS_URL` is injected automatically. Redeploy to activate.
 
-**To enable Prometheus metrics:**
-- `GET /metrics` is always available
+**Enable Prometheus metrics:**
+- `GET /metrics` is always available (no config needed)
 - Point Prometheus at it using `monitoring/prometheus.yml`
-- Alert rules are in `monitoring/alerts.yml`
+- Alert rules: `monitoring/alerts.yml`
 - Connect Grafana to Prometheus for dashboards
+
+---
+
+## API endpoints
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/health` | None | Liveness probe |
+| `GET` | `/verify` | Password | Validate app password |
+| `GET` | `/metrics` | None | Prometheus metrics |
+| `POST` | `/auth/login` | — | Exchange credentials for JWT |
+| `POST` | `/auth/register` | Admin JWT | Create a new user |
+| `GET` | `/auth/me` | JWT | Current user profile |
+| `GET` | `/auth/mode` | — | Returns `jwt` or `password` |
+| `GET` | `/auth/users` | Admin JWT | List all users |
+| `PATCH` | `/auth/users/{username}` | Admin JWT | Update role, status, or password |
+| `DELETE` | `/auth/users/{username}` | Admin JWT | Delete a user |
+| `POST` | `/query` | JWT / Password | Run a natural language query |
+| `GET` | `/audit` | JWT / Password | Retrieve audit log entries |
 
 ---
 
@@ -223,16 +247,17 @@ VAULT_TOKEN=s.xxxxxx
 
 | Control | Implementation |
 |---|---|
-| **Read-only enforcement** | `validator.py` rejects anything not starting with `SELECT`/`WITH`; blocks `INSERT`, `UPDATE`, `DELETE`, `DROP`, `CREATE`, `ALTER`, `TRUNCATE`, `MERGE` |
-| **JWT authentication** | Individual accounts with bcrypt passwords + JWT bearer tokens; requires PostgreSQL |
+| **Read-only enforcement** | `validator.py` rejects anything not starting with `SELECT`/`WITH`; blocks all write keywords |
+| **JWT authentication** | Individual accounts with bcrypt passwords + python-jose JWT tokens; PostgreSQL-backed |
+| **User management** | Full CRUD via `/auth/users/*` endpoints + built-in admin UI |
 | **Password gate** | `APP_PASSWORD` fallback when PostgreSQL is not configured |
 | **Rate limiting** | 20 req/min/IP sliding window; Redis sorted-set when available, in-process fallback |
-| **Circuit breaker** | 5 failures → OPEN (reject requests for 60s) → HALF_OPEN → CLOSED |
+| **Circuit breaker** | 5 failures → OPEN (60s) → HALF_OPEN → CLOSED |
 | **PII detection** | Results scanned for email, SSN, phone, credit card before returning to client |
-| **Audit logging** | PostgreSQL (persistent) with SQLite fallback; also streamed as JSON to stdout |
+| **Audit logging** | PostgreSQL (persistent) + SQLite fallback + JSON stdout streaming |
 | **Result caching** | TTL cache keyed by normalised SQL; Redis-backed when available |
 | **Prompt caching** | SQL Gen system prompt carries `cache_control: ephemeral` |
-| **Secrets manager** | `config/secrets.py` priority chain: AWS Secrets Manager → Vault → env vars |
+| **Secrets manager** | `config/secrets.py`: AWS Secrets Manager → Vault → env vars |
 
 ---
 
@@ -250,7 +275,7 @@ agents/
   orchestrator.py     # pipeline coordinator, retry logic, cache integration
 api/
   main.py             # FastAPI app — auth, rate limiting, PII scan, audit, SPA
-  auth.py             # JWT auth, user management, /auth/* routes
+  auth.py             # JWT auth, full user CRUD, /auth/* routes
   metrics.py          # Prometheus metrics definitions and helpers
   rate_limit.py       # sliding-window rate limiter (Redis + in-process)
 config/
@@ -265,11 +290,12 @@ db/
   postgres.py         # PostgreSQL connection pool + schema migrations
   redis_client.py     # lazy Redis client
 frontend/
-  src/App.jsx         # React chat UI — login, themes, sidebar, audit tab
+  src/App.jsx         # React chat UI — login, user mgmt, themes, sidebar, audit
   src/App.css         # CSS custom properties, 5 theme definitions
 monitoring/
   prometheus.yml      # Prometheus scrape config
   alerts.yml          # alert rules (error rate, circuit, latency, rate spike)
-Dockerfile            # multi-stage build: Node → Python, 2 uvicorn workers
+Dockerfile            # multi-stage: Node builds React, Python serves, 2 workers
 main.py               # CLI entrypoint
+PRODUCT.md            # client-facing feature overview (non-technical)
 ```
