@@ -133,17 +133,20 @@ function AssistantMessage({ data }) {
   )
 }
 
-function AuditLog({ password }) {
+function AuditLog({ password, token }) {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/audit?limit=100', { headers: { 'X-App-Password': password } })
+    const headers = token
+      ? { 'Authorization': `Bearer ${token}` }
+      : { 'X-App-Password': password }
+    fetch('/audit?limit=100', { headers })
       .then(r => r.json())
       .then(setEntries)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [password])
+  }, [password, token])
 
   if (loading) return <p className="sidebar-empty">Loading…</p>
   if (!entries.length) return <p className="sidebar-empty">No queries logged yet</p>
@@ -168,7 +171,7 @@ function AuditLog({ password }) {
   )
 }
 
-function Sidebar({ history, onSelect, isOpen, onToggle, password }) {
+function Sidebar({ history, onSelect, isOpen, onToggle, password, token }) {
   const [tab, setTab] = useState('history')
 
   return (
@@ -199,7 +202,7 @@ function Sidebar({ history, onSelect, isOpen, onToggle, password }) {
                   </button>
                 ))
           ) : (
-            <AuditLog password={password} />
+            <AuditLog password={password} token={token} />
           )}
         </div>
       </aside>
@@ -237,6 +240,20 @@ function ThemePanel({ current, onChange, onClose }) {
   )
 }
 
+// ── Auth mode detection ───────────────────────────────────────────────────────
+// Cached promise so we only hit /auth/mode once per page load.
+let _authModePromise = null
+function getAuthMode() {
+  if (!_authModePromise) {
+    _authModePromise = fetch('/auth/mode')
+      .then(r => r.json())
+      .then(d => d.mode || 'password')
+      .catch(() => 'password')
+  }
+  return _authModePromise
+}
+
+// ── Password gate (legacy mode) ───────────────────────────────────────────────
 function PasswordGate({ onUnlock }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
@@ -278,8 +295,94 @@ function PasswordGate({ onUnlock }) {
   )
 }
 
+// ── JWT login form ────────────────────────────────────────────────────────────
+function LoginForm({ onLogin }) {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
+  const usernameRef = useRef(null)
+  useEffect(() => { usernameRef.current?.focus() }, [])
+
+  async function submit(e) {
+    e.preventDefault()
+    setError('')
+    setChecking(true)
+    try {
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        localStorage.setItem('token', data.access_token)
+        onLogin(data.access_token, data.user)
+      } else {
+        const err = await res.json().catch(() => ({}))
+        setError(err.detail || 'Incorrect username or password')
+        setPassword('')
+      }
+    } catch {
+      setError('Could not reach the server')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <div className="gate-wrap">
+      <Snowflakes />
+      <form className="gate-card login-form" onSubmit={submit}>
+        <SnowflakeLogo size={38} />
+        <h1 className="gate-title">Snowflake Query Assistant</h1>
+        <p className="gate-subtitle">Sign in to continue</p>
+
+        <div className="login-field">
+          <label className="login-label" htmlFor="username">Username</label>
+          <input
+            id="username"
+            ref={usernameRef}
+            type="text"
+            className="gate-input"
+            placeholder="Username"
+            autoComplete="username"
+            value={username}
+            onChange={e => { setUsername(e.target.value); setError('') }}
+          />
+        </div>
+
+        <div className="login-field">
+          <label className="login-label" htmlFor="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            className={`gate-input${error ? ' gate-input--error' : ''}`}
+            placeholder="Password"
+            autoComplete="current-password"
+            value={password}
+            onChange={e => { setPassword(e.target.value); setError('') }}
+          />
+        </div>
+
+        {error && <p className="gate-error">{error}</p>}
+
+        <button className="gate-btn" type="submit" disabled={!username || !password || checking}>
+          {checking ? 'Signing in…' : 'Sign in →'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
 export default function App() {
-  const [password, setPassword] = useState(null)
+  // Auth state
+  const [authMode, setAuthMode] = useState(null)   // null = loading, 'jwt' | 'password'
+  const [password, setPassword] = useState(null)   // password mode
+  const [token, setToken] = useState(null)          // jwt mode
+  const [currentUser, setCurrentUser] = useState(null) // {username, role}
+
+  // Chat state
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -292,6 +395,26 @@ export default function App() {
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const toastTimerRef = useRef(null)
+
+  // On mount: detect auth mode and restore token if applicable
+  useEffect(() => {
+    getAuthMode().then(mode => {
+      setAuthMode(mode)
+      if (mode === 'jwt') {
+        const stored = localStorage.getItem('token')
+        if (stored) {
+          // Validate stored token against /auth/me
+          fetch('/auth/me', { headers: { Authorization: `Bearer ${stored}` } })
+            .then(r => r.ok ? r.json() : null)
+            .then(user => {
+              if (user) { setToken(stored); setCurrentUser(user) }
+              else { localStorage.removeItem('token') }
+            })
+            .catch(() => { localStorage.removeItem('token') })
+        }
+      }
+    })
+  }, [])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -308,7 +431,54 @@ export default function App() {
     return () => clearTimeout(t)
   }, [toast])
 
-  if (!password) return <PasswordGate onUnlock={setPassword} />
+  // ── Auth gate ────────────────────────────────────────────────────────────
+  if (authMode === null) {
+    // Still detecting auth mode — show a minimal spinner
+    return (
+      <div className="gate-wrap">
+        <Snowflakes />
+        <div className="gate-card" style={{ alignItems: 'center', gap: 24 }}>
+          <SnowflakeLogo size={38} />
+          <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem' }}>Loading…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (authMode === 'jwt' && !token) {
+    return (
+      <LoginForm
+        onLogin={(tok, user) => { setToken(tok); setCurrentUser(user) }}
+      />
+    )
+  }
+
+  if (authMode === 'password' && !password) {
+    return <PasswordGate onUnlock={setPassword} />
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  function logout() {
+    localStorage.removeItem('token')
+    setToken(null)
+    setCurrentUser(null)
+    setPassword(null)
+    setMessages([])
+    setConvHistory([])
+    setHistory([])
+  }
+
+  function authHeaders() {
+    if (authMode === 'jwt') return { Authorization: `Bearer ${token}` }
+    return { 'X-App-Password': password }
+  }
+
+  function handle401() {
+    localStorage.removeItem('token')
+    setToken(null)
+    setPassword(null)
+    setCurrentUser(null)
+  }
 
   function resizeTextarea() {
     const el = textareaRef.current
@@ -330,11 +500,11 @@ export default function App() {
     try {
       const res = await fetch('/query', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-App-Password': password },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ question: q, history: convHistory }),
       })
       clearTimeout(toastTimerRef.current); setToast(null)
-      if (res.status === 401) { setPassword(null); return }
+      if (res.status === 401) { handle401(); return }
       if (!res.ok) throw new Error(`Server error ${res.status}`)
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', data }])
@@ -386,6 +556,19 @@ export default function App() {
               New chat
             </button>
           )}
+          {currentUser && (
+            <div className="user-chip">
+              <span className="user-chip__name">{currentUser.username}</span>
+              {currentUser.role === 'admin' && (
+                <span className="user-chip__role">admin</span>
+              )}
+            </div>
+          )}
+          {(token || password) && (
+            <button className="logout-btn" onClick={logout} title="Sign out">
+              Sign out
+            </button>
+          )}
           <button className="settings-btn" onClick={() => setSettingsOpen(o => !o)} aria-label="Settings">
             ⚙
           </button>
@@ -406,6 +589,7 @@ export default function App() {
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(o => !o)}
           password={password}
+          token={token}
         />
 
         <div className="chat-wrap">

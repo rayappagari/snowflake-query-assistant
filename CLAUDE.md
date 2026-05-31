@@ -239,3 +239,155 @@ result_cache.invalidate(sql)       # flush one SQL entry
 from db.circuit_breaker import snowflake_breaker
 print(snowflake_breaker.state)   # "closed" | "open" | "half_open"
 ```
+
+---
+
+## Enterprise features
+
+### Auth system
+
+The app supports two authentication modes selected automatically at startup:
+
+| Mode | When active | Gate shown |
+|------|-------------|------------|
+| `password` | `DATABASE_URL` **not** set | Single password field (`APP_PASSWORD`) |
+| `jwt` | `DATABASE_URL` is set | Username + password login form |
+
+**JWT mode setup:**
+1. Set `DATABASE_URL` to point at a PostgreSQL instance.
+2. Set `JWT_SECRET_KEY` to a stable random value (`openssl rand -hex 32`).
+3. Set `ADMIN_USERNAME` + `ADMIN_PASSWORD` to bootstrap the first admin.
+4. Start the app — the admin user is created automatically if the users table is empty.
+
+**Creating additional users** (requires admin JWT):
+```bash
+curl -X POST /auth/register \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"s3cr3t","role":"user"}'
+```
+
+**Endpoints:**
+- `POST /auth/login` — exchange credentials for a JWT
+- `GET /auth/me` — current user info
+- `GET /auth/mode` — returns `{"mode":"jwt"}` or `{"mode":"password"}`
+- `POST /auth/register` — admin-only user creation
+
+The frontend calls `/auth/mode` once on init, caches the result, and shows
+the appropriate login UI.  Tokens are stored in `localStorage` and validated
+against `/auth/me` on page reload.
+
+---
+
+### PostgreSQL
+
+Adds a persistent, cross-worker audit log and the users table for JWT auth.
+
+**On Railway:**
+1. Add a PostgreSQL service from the Railway dashboard.
+2. Railway sets `DATABASE_URL` automatically — no further config needed.
+
+**Tables created on first startup** (`db/postgres.py:_migrate()`):
+- `users` — application user accounts
+- `audit_log` — full query history visible to all workers
+
+When `DATABASE_URL` is absent the app falls back to SQLite for the audit log
+and disables JWT auth — no code changes required.
+
+---
+
+### Redis
+
+Enables cross-worker result caching and rate limiting.
+
+**On Railway:**
+1. Add a Redis service from the Railway dashboard.
+2. Railway sets `REDIS_URL` automatically.
+
+**What Redis stores:**
+- Result cache entries: `snowflake_cache:<sha256>` (HASH with TTL)
+- Rate-limit sliding windows: `ratelimit:<client_id>` (sorted set)
+
+When `REDIS_URL` is absent both subsystems fall back to in-process state
+(per-worker, not shared). The app starts normally either way.
+
+---
+
+### Prometheus metrics
+
+Exposed at `GET /metrics` in the Prometheus text format.
+
+**Metrics:**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `query_requests_total` | Counter | status, cache_hit, model |
+| `query_latency_seconds` | Histogram | — |
+| `cache_hits_total` | Counter | — |
+| `rate_limit_exceeded_total` | Counter | — |
+| `pii_detections_total` | Counter | pii_type |
+| `circuit_breaker_state` | Gauge | — (0=closed, 1=half_open, 2=open) |
+| `active_users_total` | Gauge | — |
+
+**Connecting Prometheus:**
+Point `prometheus.yml` at `localhost:8000` (see `monitoring/prometheus.yml`).
+
+**Connecting Grafana:**
+Add a Prometheus data source pointing at your Prometheus server, then import a
+dashboard that queries the metrics above.
+
+**Alert rules:**
+See `monitoring/alerts.yml` for pre-defined rules covering error rate, circuit
+breaker state, latency, and rate-limit spikes.
+
+---
+
+### Secrets loader
+
+`config/secrets.py` provides a `get(key)` function that resolves secrets using
+a priority chain:
+
+1. **AWS Secrets Manager** — set `AWS_SECRET_ARN` and ensure the Lambda/ECS role
+   has `secretsmanager:GetSecretValue` permission. The secret must be a JSON
+   object keyed by the env var names.
+2. **HashiCorp Vault** — set `VAULT_ADDR` + `VAULT_TOKEN`. Secrets are fetched
+   from the KV-v2 path in `VAULT_PATH` (default: `secret/data/snowflake-agent`).
+3. **Environment variable** — always the final fallback.
+
+For most deployments, environment variables are sufficient. Use the external
+sources only when you need centralised rotation, audit, or RBAC policies.
+
+```python
+from config.secrets import get
+api_key = get("ANTHROPIC_API_KEY")   # tries AWS → Vault → env
+```
+
+---
+
+### Enterprise quick-start checklist
+
+Minimum set of env vars to enable all enterprise features:
+
+```env
+# Required (existing)
+ANTHROPIC_API_KEY=...
+SNOWFLAKE_ACCOUNT=...
+SNOWFLAKE_USER=...
+SNOWFLAKE_PASSWORD=...
+SNOWFLAKE_DATABASE=...
+SNOWFLAKE_WAREHOUSE=...
+
+# JWT auth + persistent audit
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+JWT_SECRET_KEY=<openssl rand -hex 32>
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<strong-password>
+
+# Cross-worker cache + rate limiting
+REDIS_URL=redis://localhost:6379
+
+# (Optional) Prometheus
+METRICS_ENABLED=true
+```
+
+On Railway: add PostgreSQL and Redis services — both URLs are injected automatically.

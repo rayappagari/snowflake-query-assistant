@@ -1,0 +1,55 @@
+groups:
+  - name: snowflake_query_assistant
+    rules:
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            rate(query_requests_total{status="error"}[5m])
+            /
+            rate(query_requests_total[5m])
+          ) > 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High query error rate"
+          description: >
+            More than 10% of queries are failing over the last 5 minutes.
+            Current rate: {{ $value | humanizePercentage }}
+
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Snowflake circuit breaker is not closed"
+          description: >
+            The Snowflake circuit breaker has been in state {{ $value }}
+            (1=half_open, 2=open) for more than 1 minute. Check Snowflake
+            connectivity and recent error logs.
+
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95, rate(query_latency_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 query latency exceeds 30 seconds"
+          description: >
+            The 95th-percentile end-to-end query latency is
+            {{ $value | humanizeDuration }} over the last 5 minutes.
+
+      - alert: RateLimitSpike
+        expr: rate(rate_limit_exceeded_total[1m]) * 60 > 10
+        for: 0m
+        labels:
+          severity: info
+        annotations:
+          summary: "Rate limit spike detected"
+          description: >
+            More than 10 requests per minute are being rejected by the rate
+            limiter. Consider raising RATE_LIMIT_RPM or investigating the
+            source IP.

@@ -780,6 +780,68 @@ tr:hover td { background: var(--surface2); }
   white-space: nowrap;
 }
 
+/* ── Login form (JWT mode) ── */
+.login-form { gap: 14px; }
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.login-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+}
+
+/* ── User chip (shown in header when logged in via JWT) ── */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 0.78rem;
+}
+
+.user-chip__name {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.user-chip__role {
+  background: var(--brand-dim);
+  color: var(--brand);
+  border: 1px solid var(--brand);
+  border-radius: 8px;
+  padding: 1px 7px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* ── Logout button ── */
+.logout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.logout-btn:hover { border-color: #ef4444; color: #ef4444; }
+
 /* ── Mobile ── */
 @media (max-width: 768px) {
   .sidebar {
