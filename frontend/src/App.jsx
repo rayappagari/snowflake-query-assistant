@@ -5,6 +5,14 @@ import 'highlight.js/styles/atom-one-dark.css'
 
 hljs.registerLanguage('sql', sql)
 
+const THEMES = [
+  { id: 'dark',     name: 'Dark',     bg: '#0b0f19', accent: '#29B5E8' },
+  { id: 'midnight', name: 'Midnight', bg: '#0d0a1a', accent: '#a78bfa' },
+  { id: 'ocean',    name: 'Ocean',    bg: '#071218', accent: '#2dd4bf' },
+  { id: 'sunset',   name: 'Sunset',   bg: '#100804', accent: '#f59e0b' },
+  { id: 'light',    name: 'Light',    bg: '#f8fafc', accent: '#1d4ed8' },
+]
+
 const EXAMPLES = [
   'Top 5 customers by revenue',
   'Total orders per region last quarter',
@@ -146,6 +154,32 @@ function Toast({ message }) {
   return <div className="toast">{message}</div>
 }
 
+function ThemePanel({ current, onChange, onClose }) {
+  return (
+    <div className="theme-panel">
+      <div className="theme-panel-header">
+        <span>Theme</span>
+        <button className="theme-panel-close" onClick={onClose}>✕</button>
+      </div>
+      <div className="theme-grid">
+        {THEMES.map(t => (
+          <button
+            key={t.id}
+            className={`theme-swatch${current === t.id ? ' theme-swatch--active' : ''}`}
+            onClick={() => onChange(t.id)}
+            title={t.name}
+          >
+            <div className="swatch-preview" style={{ background: t.bg }}>
+              <div className="swatch-accent" style={{ background: t.accent }} />
+            </div>
+            <span className="swatch-label">{t.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function PasswordGate({ onUnlock }) {
   const [value, setValue] = useState('')
   const [error, setError] = useState(false)
@@ -193,11 +227,18 @@ export default function App() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [history, setHistory] = useState([])
   const [toast, setToast] = useState(null)
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const toastTimerRef = useRef(null)
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    localStorage.setItem('theme', theme)
+  }, [theme])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -270,6 +311,18 @@ export default function App() {
         <div className="header-brand">
           <SnowflakeLogo size={20} />
           <span>Snowflake Query Assistant</span>
+        </div>
+        <div className="header-right">
+          <button className="settings-btn" onClick={() => setSettingsOpen(o => !o)} aria-label="Settings">
+            ⚙
+          </button>
+          {settingsOpen && (
+            <ThemePanel
+              current={theme}
+              onChange={t => { setTheme(t); setSettingsOpen(false) }}
+              onClose={() => setSettingsOpen(false)}
+            />
+          )}
         </div>
       </header>
 
