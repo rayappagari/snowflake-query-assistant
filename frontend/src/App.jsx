@@ -125,25 +125,74 @@ function AssistantMessage({ data }) {
   )
 }
 
-function Sidebar({ history, onSelect, isOpen, onToggle }) {
+function AuditLog({ password }) {
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/audit?limit=100', { headers: { 'X-App-Password': password } })
+      .then(r => r.json())
+      .then(setEntries)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [password])
+
+  if (loading) return <p className="sidebar-empty">Loading…</p>
+  if (!entries.length) return <p className="sidebar-empty">No queries logged yet</p>
+
+  return (
+    <div className="audit-list">
+      {entries.map(e => (
+        <div key={e.id} className={`audit-entry${e.success ? '' : ' audit-entry--fail'}`}>
+          <div className="audit-row">
+            <span className="audit-status">{e.success ? '✓' : '✗'}</span>
+            <span className="audit-q">{e.question}</span>
+          </div>
+          <div className="audit-meta">
+            <span>{new Date(e.ts).toLocaleTimeString()}</span>
+            {e.latency_ms != null && <span>{e.latency_ms}ms</span>}
+            {e.row_count != null && <span>{e.row_count} rows</span>}
+            {e.error_message && <span className="audit-err">{e.error_message}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Sidebar({ history, onSelect, isOpen, onToggle, password }) {
+  const [tab, setTab] = useState('history')
+
   return (
     <>
       <div className={`sidebar-overlay${isOpen ? ' sidebar-overlay--on' : ''}`} onClick={onToggle} />
       <aside className={`sidebar${isOpen ? ' sidebar--open' : ''}`}>
         <div className="sidebar-header">
-          <span>History</span>
+          <div className="sidebar-tabs">
+            <button
+              className={`sidebar-tab${tab === 'history' ? ' sidebar-tab--active' : ''}`}
+              onClick={() => setTab('history')}
+            >History</button>
+            <button
+              className={`sidebar-tab${tab === 'audit' ? ' sidebar-tab--active' : ''}`}
+              onClick={() => setTab('audit')}
+            >Audit</button>
+          </div>
           <button className="sidebar-close" onClick={onToggle}>✕</button>
         </div>
         <div className="sidebar-list">
-          {history.length === 0
-            ? <p className="sidebar-empty">No queries yet</p>
-            : history.map((item, i) => (
-                <button key={i} className="sidebar-item" onClick={() => onSelect(item.question)}>
-                  <span className="sidebar-q">{item.question}</span>
-                  <span className="sidebar-time">{item.time}</span>
-                </button>
-              ))
-          }
+          {tab === 'history' ? (
+            history.length === 0
+              ? <p className="sidebar-empty">No queries yet</p>
+              : history.map((item, i) => (
+                  <button key={i} className="sidebar-item" onClick={() => onSelect(item.question)}>
+                    <span className="sidebar-q">{item.question}</span>
+                    <span className="sidebar-time">{item.time}</span>
+                  </button>
+                ))
+          ) : (
+            <AuditLog password={password} />
+          )}
         </div>
       </aside>
     </>
@@ -348,6 +397,7 @@ export default function App() {
           onSelect={q => { fillExample(q); setSidebarOpen(false) }}
           isOpen={sidebarOpen}
           onToggle={() => setSidebarOpen(o => !o)}
+          password={password}
         />
 
         <div className="chat-wrap">
