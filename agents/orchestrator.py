@@ -82,16 +82,20 @@ def answer_question(question: str, verbose: bool = True) -> str:
     )
 
 
-def answer_question_full(question: str) -> QueryResult:
+def answer_question_full(
+    question: str,
+    history: list[dict] | None = None,
+) -> QueryResult:
     """
     Same pipeline as answer_question but returns structured QueryResult
     (answer + SQL + serialised rows) for the API layer.
+    Pass history (list of {question, sql, answer} dicts) for conversation memory.
     """
     schema = identify_relevant_schema(question)
     last_error: str | None = None
 
     for attempt in range(1, MAX_RETRIES + 1):
-        sql = generate_sql(question, schema, previous_error=last_error)
+        sql = generate_sql(question, schema, previous_error=last_error, history=history)
 
         valid, validation_msg = validate_sql(sql)
         if not valid:
@@ -106,7 +110,7 @@ def answer_question_full(question: str) -> QueryResult:
             last_error = f"Execution error: {last_error}"
             continue
 
-        answer = interpret_results(question, sql, rows)
+        answer = interpret_results(question, sql, rows, history=history)
         serialised = [_jsonify(r) for r in rows]
         return QueryResult(answer=answer, sql=sql, rows=serialised, row_count=len(rows))
 

@@ -228,7 +228,8 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [history, setHistory] = useState([])
+  const [history, setHistory] = useState([])          // sidebar display history
+  const [convHistory, setConvHistory] = useState([])  // API conversation memory
   const [toast, setToast] = useState(null)
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark')
   const bottomRef = useRef(null)
@@ -273,7 +274,7 @@ export default function App() {
       const res = await fetch('/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-App-Password': password },
-        body: JSON.stringify({ question: q }),
+        body: JSON.stringify({ question: q, history: convHistory }),
       })
       clearTimeout(toastTimerRef.current); setToast(null)
       if (res.status === 401) { setPassword(null); return }
@@ -284,6 +285,12 @@ export default function App() {
         { question: q, time: new Date().toLocaleTimeString() },
         ...prev,
       ].slice(0, 50))
+      if (!data.error) {
+        setConvHistory(prev => [
+          ...prev,
+          { question: q, sql: data.sql, answer: data.answer },
+        ].slice(-10))
+      }
     } catch (err) {
       clearTimeout(toastTimerRef.current); setToast(null)
       setMessages(prev => [...prev, {
@@ -313,6 +320,15 @@ export default function App() {
           <span>Snowflake Query Assistant</span>
         </div>
         <div className="header-right">
+          {convHistory.length > 0 && (
+            <button
+              className="clear-btn"
+              onClick={() => { setConvHistory([]); setMessages([]); setHistory([]) }}
+              title="Clear conversation memory"
+            >
+              New chat
+            </button>
+          )}
           <button className="settings-btn" onClick={() => setSettingsOpen(o => !o)} aria-label="Settings">
             ⚙
           </button>

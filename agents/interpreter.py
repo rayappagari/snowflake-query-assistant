@@ -5,6 +5,7 @@ import anthropic
 _client = anthropic.Anthropic()
 
 _MAX_ROWS_TO_MODEL = 50
+_MAX_HISTORY = 3
 
 _SYSTEM = (
     "You are a concise data analyst. "
@@ -19,6 +20,7 @@ def interpret_results(
     question: str,
     sql: str,
     results: list[dict[str, Any]],
+    history: list[dict] | None = None,
 ) -> str:
     if not results:
         return "The query returned no results."
@@ -31,22 +33,27 @@ def interpret_results(
         else ""
     )
 
+    content = ""
+    if history:
+        prior = "\n".join(
+            f"- Q: {t['question']} → {t['answer']}"
+            for t in history[-_MAX_HISTORY:]
+        )
+        content += f"Prior conversation context:\n{prior}\n\n"
+
+    content += (
+        f"Question: {question}\n\n"
+        f"SQL:\n{sql}\n\n"
+        f"Results:\n{rows_text}{truncation}"
+    )
+
     response = _client.messages.create(
         model="claude-opus-4-8",
         max_tokens=1024,
         thinking={"type": "adaptive"},
         output_config={"effort": "high"},
         system=_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Question: {question}\n\n"
-                    f"SQL:\n{sql}\n\n"
-                    f"Results:\n{rows_text}{truncation}"
-                ),
-            }
-        ],
+        messages=[{"role": "user", "content": content}],
     )
     for block in response.content:
         if block.type == "text":

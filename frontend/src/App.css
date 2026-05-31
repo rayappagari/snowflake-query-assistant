@@ -572,6 +572,20 @@ tr:hover td { background: var(--surface2); }
   align-items: center;
 }
 
+.clear-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+.clear-btn:hover { border-color: var(--brand); color: var(--brand); }
+
 .settings-btn {
   background: none;
   border: none;

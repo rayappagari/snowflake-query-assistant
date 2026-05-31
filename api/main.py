@@ -24,8 +24,15 @@ def _check_password(x_app_password: str | None) -> None:
         raise HTTPException(status_code=401, detail="Incorrect password")
 
 
+class HistoryTurn(BaseModel):
+    question: str
+    sql: str
+    answer: str
+
+
 class QueryRequest(BaseModel):
     question: str
+    history: list[HistoryTurn] = []
 
 
 class QueryResponse(BaseModel):
@@ -50,7 +57,8 @@ def verify(x_app_password: str | None = Header(default=None)) -> dict:
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest, x_app_password: str | None = Header(default=None)) -> QueryResponse:
     _check_password(x_app_password)
-    result = answer_question_full(req.question)
+    history = [t.model_dump() for t in req.history]
+    result = answer_question_full(req.question, history=history or None)
     return QueryResponse(
         answer=result.answer,
         sql=result.sql,
