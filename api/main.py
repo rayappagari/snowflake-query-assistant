@@ -41,6 +41,12 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/verify")
+def verify(x_app_password: str | None = Header(default=None)) -> dict:
+    _check_password(x_app_password)
+    return {"ok": True}
+
+
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest, x_app_password: str | None = Header(default=None)) -> QueryResponse:
     _check_password(x_app_password)

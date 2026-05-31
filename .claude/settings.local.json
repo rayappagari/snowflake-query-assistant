@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"C:\\\\Users\\\\rayap\\\\snowflake_agent\"; $env:PYTHONIOENCODING=\"utf-8\"; python main.py -q \"show me top 10 orders by total price\" 2>&1)",
+      "PowerShell(cd \"C:\\\\Users\\\\rayap\\\\snowflake_agent\"; $env:PYTHONIOENCODING=\"utf-8\"; python main.py -q \"show me the line items for the top order by total price \\(order key 1750466\\)\" 2>&1)",
+      "PowerShell(Start-Sleep -Seconds 4; Invoke-WebRequest -Uri \"http://localhost:8000/health\" -UseBasicParsing 2>&1)",
+      "Bash(pip show *)",
+      "Bash(uvicorn api.main:app --port 8000)",
+      "Bash(echo \"PID: $!\")",
+      "PowerShell(Start-Process \"http://localhost:5174\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "PowerShell(winget list *)",
+      "PowerShell(winget install *)",
+      "PowerShell(gh *)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(railway service *)"
+    ]
+  }
+}
