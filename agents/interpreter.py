@@ -66,11 +66,11 @@ def interpret_results(
         f"Results:\n{rows_text}{truncation}"
     )
 
+    kwargs = {"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}} if model == OPUS else {}
     response = _client.messages.create(
         model=model,
         max_tokens=1024,
-        thinking={"type": "adaptive"},
-        output_config={"effort": "high"},
+        **kwargs,
         system=_SYSTEM,
         messages=[{"role": "user", "content": content}],
     )
