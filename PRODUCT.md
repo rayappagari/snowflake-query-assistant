@@ -55,6 +55,7 @@ The assistant recognises the type of question being asked and applies specialist
 | **Data quality** | Nulls, duplicates, stale data, referential integrity, outliers | Reports defect rates as percentages, flags orphaned foreign keys and out-of-range values, prioritises by severity |
 | **User behavior** | DAU/MAU/WAU, sessions, feature adoption, drop-off, activity patterns | Segments users by activity level, calculates stickiness ratios, highlights disengagement points in user journeys |
 | **Financial reporting** | P&L, EBITDA, cash flow, budget vs actuals, cost centre spend | Applies correct sign conventions, computes absolute and percentage variance, flags material over/under-budget items |
+| **Supply chain** | Lead times, supplier performance, on-time delivery, backorders, forecast accuracy | Ranks suppliers by delay impact, computes fill and on-time rates, surfaces bottlenecks and chronic backorders |
 
 This happens invisibly. You ask a normal question; the assistant silently selects the right domain lens and returns a richer, more targeted answer.
 

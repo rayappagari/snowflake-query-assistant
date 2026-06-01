@@ -140,6 +140,7 @@ system prompts (which remain prompt-cache-friendly).
 | `data_quality.py` | Null rates, duplicates, data freshness, orphaned FKs, out-of-range values, empty strings |
 | `user_behavior.py` | DAU/MAU/WAU, session analysis, feature adoption, activity segmentation, drop-off detection |
 | `financial_reporting.py` | P&L, balance sheet, cash flow, budget vs actuals, variance analysis, period-end close |
+| `supply_chain.py` | Lead times, supplier performance, on-time delivery, forecast accuracy, fill rate, backorders |
 
 ---
 

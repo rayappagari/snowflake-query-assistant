@@ -13,7 +13,7 @@ Ask questions about your Snowflake data in plain English. A multi-agent pipeline
 |---|---|
 | **Natural language queries** | Ask anything — no SQL knowledge required |
 | **Conversation memory** | Follow-up questions resolve correctly ("filter that by region", "now just the top 3") |
-| **Domain skills** | Keyword-matched skills inject domain-specific SQL patterns and analysis guidance for revenue, customers, inventory, cohorts, coding standards, performance optimization, data quality, user behavior, and financial reporting |
+| **Domain skills** | Keyword-matched skills inject domain-specific SQL patterns and analysis guidance for revenue, customers, inventory, cohorts, coding standards, performance optimization, data quality, user behavior, financial reporting, and supply chain |
 | **Model routing** | Simple lookups use Haiku; complex analytics use Opus 4.8 — automatically |
 | **Result caching** | Identical SQL skips Snowflake entirely; ⚡ badge shown on cached responses |
 | **Syntax-highlighted SQL** | Collapsible SQL block with highlight.js |
@@ -85,7 +85,7 @@ Each stage is a plain synchronous function call — no framework, no message bus
 | Agent | Model | Role |
 |---|---|---|
 | Router | — | Regex heuristic selects Haiku or Opus per query |
-| Skills Router | — | Keyword scoring selects a domain skill (revenue, customers, inventory, cohorts, coding standards, performance, data quality, user behavior, financial reporting) or none |
+| Skills Router | — | Keyword scoring selects a domain skill (revenue, customers, inventory, cohorts, coding standards, performance, data quality, user behavior, financial reporting, supply chain) or none |
 | Schema | Haiku | Filters `INFORMATION_SCHEMA` to relevant tables |
 | SQL Gen | Haiku / Opus 4.8 | Writes a `SELECT` query; injects skill hints + last 5 conversation turns |
 | Validator | — | Enforces read-only; then runs Snowflake `EXPLAIN` |
@@ -289,6 +289,7 @@ skills/
   data_quality.py              # nulls, duplicates, freshness, orphaned FKs, out-of-range values
   user_behavior.py             # DAU/MAU/WAU, sessions, feature adoption, activity segmentation
   financial_reporting.py       # P&L, balance sheet, cash flow, budget vs actuals, variance analysis
+  supply_chain.py              # lead times, supplier performance, on-time delivery, fill rate, backorders
 api/
   main.py             # FastAPI app — auth, rate limiting, PII scan, audit, SPA
   auth.py             # JWT auth, full user CRUD, /auth/* routes
