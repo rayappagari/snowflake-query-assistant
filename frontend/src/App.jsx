@@ -2,6 +2,12 @@ import { useState, useRef, useEffect } from 'react'
 import hljs from 'highlight.js/lib/core'
 import sql from 'highlight.js/lib/languages/sql'
 import 'highlight.js/styles/atom-one-dark.css'
+import {
+  LineChart, Line,
+  BarChart, Bar,
+  PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from 'recharts'
 
 hljs.registerLanguage('sql', sql)
 
@@ -84,6 +90,112 @@ function downloadCSV(rows) {
   URL.revokeObjectURL(url)
 }
 
+// ── Chart helpers ─────────────────────────────────────────────────────────────
+
+const CHART_COLORS = ['#29B5E8', '#a78bfa', '#2dd4bf', '#f59e0b', '#f87171', '#34d399']
+
+function isNumericCol(rows, col) {
+  return rows.some(r => r[col] !== null && r[col] !== '' && !isNaN(Number(r[col])))
+    && rows.every(r => r[col] === null || r[col] === '' || !isNaN(Number(r[col])))
+}
+
+function isDateCol(col) {
+  return /date|month|year|time|period|week|quarter|day/i.test(col)
+}
+
+function detectChart(rows) {
+  if (!rows || rows.length < 2) return null
+  const cols = Object.keys(rows[0])
+  const numericCols = cols.filter(c => isNumericCol(rows, c))
+  const labelCols = cols.filter(c => !isNumericCol(rows, c))
+  if (numericCols.length === 0 || labelCols.length === 0) return null
+
+  const xKey = labelCols.find(isDateCol) || labelCols[0]
+  const yKeys = numericCols.slice(0, 3)
+
+  const type = labelCols.some(isDateCol)
+    ? 'line'
+    : rows.length <= 8 && numericCols.length === 1
+      ? 'pie'
+      : 'bar'
+
+  return { type, xKey, yKeys }
+}
+
+function formatLabel(val) {
+  if (val === null || val === undefined) return ''
+  const s = String(val)
+  return s.length > 14 ? s.slice(0, 13) + '…' : s
+}
+
+function ChartView({ rows }) {
+  const cfg = detectChart(rows)
+  if (!cfg) return <p className="chart-empty">No chart available for this data shape.</p>
+
+  const data = rows.map(r => {
+    const entry = { [cfg.xKey]: r[cfg.xKey] }
+    cfg.yKeys.forEach(k => { entry[k] = r[k] !== null && r[k] !== '' ? Number(r[k]) : null })
+    return entry
+  })
+
+  const commonProps = {
+    data,
+    margin: { top: 10, right: 20, left: 10, bottom: 60 },
+  }
+
+  if (cfg.type === 'pie') {
+    const key = cfg.yKeys[0]
+    return (
+      <ResponsiveContainer width="100%" height={320}>
+        <PieChart>
+          <Pie data={data} dataKey={key} nameKey={cfg.xKey} cx="50%" cy="45%"
+            outerRadius={110} label={({ name }) => formatLabel(name)}>
+            {data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
+          </Pie>
+          <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+          <Legend />
+        </PieChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  if (cfg.type === 'line') {
+    return (
+      <ResponsiveContainer width="100%" height={320}>
+        <LineChart {...commonProps}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey={cfg.xKey} tickFormatter={formatLabel}
+            tick={{ fill: 'var(--text-dim)', fontSize: 11 }} angle={-35} textAnchor="end" interval="preserveStartEnd" />
+          <YAxis tick={{ fill: 'var(--text-dim)', fontSize: 11 }} tickFormatter={v => Number(v).toLocaleString()} />
+          <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+          {cfg.yKeys.length > 1 && <Legend />}
+          {cfg.yKeys.map((k, i) => (
+            <Line key={k} type="monotone" dataKey={k} stroke={CHART_COLORS[i]}
+              strokeWidth={2} dot={data.length <= 20} name={k} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  // bar
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart {...commonProps}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+        <XAxis dataKey={cfg.xKey} tickFormatter={formatLabel}
+          tick={{ fill: 'var(--text-dim)', fontSize: 11 }} angle={-35} textAnchor="end" interval={0} />
+        <YAxis tick={{ fill: 'var(--text-dim)', fontSize: 11 }} tickFormatter={v => Number(v).toLocaleString()} />
+        <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+        {cfg.yKeys.length > 1 && <Legend />}
+        {cfg.yKeys.map((k, i) => (
+          <Bar key={k} dataKey={k} fill={CHART_COLORS[i]} name={k} radius={[3, 3, 0, 0]} />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+}
+
 function ResultsTable({ rows, rowCount }) {
   if (!rows || rows.length === 0) return null
   const cols = Object.keys(rows[0])
@@ -116,6 +228,9 @@ function UserMessage({ text }) {
 
 function AssistantMessage({ data }) {
   const { answer, sql, rows, row_count, error, cache_hit, pii_detected } = data
+  const [view, setView] = useState('table')
+  const hasChart = rows && rows.length >= 2 && detectChart(rows) !== null
+
   return (
     <div className="assistant-card msg-in">
       <div className="answer-header">
@@ -128,7 +243,26 @@ function AssistantMessage({ data }) {
         </div>
       )}
       {sql && <SqlBlock sql={sql} />}
-      {rows && rows.length > 0 && <ResultsTable rows={rows} rowCount={row_count} />}
+      {rows && rows.length > 0 && (
+        <>
+          {hasChart && (
+            <div className="view-toggle">
+              <button
+                className={`view-btn${view === 'table' ? ' view-btn--active' : ''}`}
+                onClick={() => setView('table')}
+              >⊞ Table</button>
+              <button
+                className={`view-btn${view === 'chart' ? ' view-btn--active' : ''}`}
+                onClick={() => setView('chart')}
+              >◈ Chart</button>
+            </div>
+          )}
+          {view === 'table'
+            ? <ResultsTable rows={rows} rowCount={row_count} />
+            : <div className="chart-wrap"><ChartView rows={rows} /></div>
+          }
+        </>
+      )}
     </div>
   )
 }

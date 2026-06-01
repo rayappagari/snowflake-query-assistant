@@ -425,6 +425,44 @@ body {
 }
 .sql-pre code.hljs { padding: 14px 16px !important; border-radius: 8px; }
 
+/* ── View toggle (Table / Chart) ── */
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.view-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.view-btn:hover { border-color: var(--brand); color: var(--brand); }
+.view-btn--active {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-dim);
+}
+
+/* ── Chart ── */
+.chart-wrap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 8px 8px;
+  background: var(--surface);
+}
+.chart-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 24px 0;
+}
+
 /* ── Results table ── */
 .results-block { display: flex; flex-direction: column; gap: 6px; }
 
