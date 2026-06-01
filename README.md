@@ -290,6 +290,7 @@ skills/
   user_behavior.py             # DAU/MAU/WAU, sessions, feature adoption, activity segmentation
   financial_reporting.py       # P&L, balance sheet, cash flow, budget vs actuals, variance analysis
   supply_chain.py              # lead times, supplier performance, on-time delivery, fill rate, backorders
+  marketing_analytics.py       # campaign performance, ROAS, CAC, CTR, attribution, channel mix
 api/
   main.py             # FastAPI app — auth, rate limiting, PII scan, audit, SPA
   auth.py             # JWT auth, full user CRUD, /auth/* routes

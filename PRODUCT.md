@@ -56,6 +56,7 @@ The assistant recognises the type of question being asked and applies specialist
 | **User behavior** | DAU/MAU/WAU, sessions, feature adoption, drop-off, activity patterns | Segments users by activity level, calculates stickiness ratios, highlights disengagement points in user journeys |
 | **Financial reporting** | P&L, EBITDA, cash flow, budget vs actuals, cost centre spend | Applies correct sign conventions, computes absolute and percentage variance, flags material over/under-budget items |
 | **Supply chain** | Lead times, supplier performance, on-time delivery, backorders, forecast accuracy | Ranks suppliers by delay impact, computes fill and on-time rates, surfaces bottlenecks and chronic backorders |
+| **Marketing analytics** | Campaigns, ROAS, CAC, CTR, attribution, channel mix, UTM tracking | Ranks campaigns by ROAS and CPA, flags high-spend low-conversion campaigns, compares channel contribution |
 
 This happens invisibly. You ask a normal question; the assistant silently selects the right domain lens and returns a richer, more targeted answer.
 
