@@ -135,6 +135,7 @@ system prompts (which remain prompt-cache-friendly).
 | `customer_segmentation.py` | RFM analysis, LTV, churn, top-N customers |
 | `inventory_analysis.py` | Stockout risk, turnover rate, reorder alerts |
 | `cohort_analysis.py` | Retention cohorts, funnel conversion, drop-off |
+| `coding_standards.py` | SQL/schema naming conventions, structural anti-patterns, standards audits |
 
 ---
 
