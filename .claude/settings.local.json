@@ -18,7 +18,8 @@
       "Bash(railway logs *)",
       "Bash(railway up *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python *)"
     ]
   }
 }
