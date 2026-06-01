@@ -12,7 +12,6 @@ skill = Skill(
         "weekly active", "power users", "casual users",
         "drop off", "drop-off", "bounce", "bounce rate",
         "time on site", "time spent", "visit frequency", "visit duration",
-        "session duration", "session length",
         "event tracking", "events", "user journey", "user path",
         "heatmap", "scroll depth", "interaction", "interactions",
         "login frequency", "last login", "inactive users", "inactive",
