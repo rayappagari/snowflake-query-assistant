@@ -10,7 +10,7 @@ skill = Skill(
         "roas", "return on ad spend", "ad spend", "ad performance",
         "impressions", "clicks", "ctr", "click-through rate",
         "conversion", "conversions", "conversion rate", "conversion funnel",
-        "leads", "lead generation", "qualified leads", "mql", "sql",
+        "leads", "lead generation", "qualified leads", "mql", "sales qualified lead",
         "channel", "channels", "marketing channel", "paid search", "organic",
         "email campaign", "email open rate", "email click rate", "unsubscribe",
         "social media", "paid social", "organic social",
