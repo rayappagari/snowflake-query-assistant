@@ -137,6 +137,7 @@ system prompts (which remain prompt-cache-friendly).
 | `cohort_analysis.py` | Retention cohorts, funnel conversion, drop-off |
 | `coding_standards.py` | SQL/schema naming conventions, structural anti-patterns, standards audits |
 | `performance_optimization.py` | Slow query detection, credit cost, partition pruning, disk spillage, warehouse utilization |
+| `data_quality.py` | Null rates, duplicates, data freshness, orphaned FKs, out-of-range values, empty strings |
 
 ---
 

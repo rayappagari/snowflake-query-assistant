@@ -52,6 +52,7 @@ The assistant recognises the type of question being asked and applies specialist
 | **Cohort & funnel** | Retention rates, funnel drop-off, conversion, onboarding | Cohort bucketing, per-stage conversion rates, largest drop-off identification |
 | **Coding standards** | Naming conventions, schema quality, anti-patterns | Flags non-snake_case names, missing primary keys, overly wide tables, generic column names |
 | **Performance optimization** | Slow queries, credit cost, warehouse load, partition pruning | Ranks queries by cost/time, surfaces spillage and poor pruning, suggests clustering keys and filters |
+| **Data quality** | Nulls, duplicates, stale data, referential integrity, outliers | Reports defect rates as percentages, flags orphaned foreign keys and out-of-range values, prioritises by severity |
 
 This happens invisibly. You ask a normal question; the assistant silently selects the right domain lens and returns a richer, more targeted answer.
 
