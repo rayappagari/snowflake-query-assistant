@@ -315,4 +315,17 @@ monitoring/
 Dockerfile            # multi-stage: Node builds React, Python serves, 2 workers
 main.py               # CLI entrypoint
 PRODUCT.md            # client-facing feature overview (non-technical)
+.claude/
+  skills/
+    pr-review.md      # /pr-review — Claude Code skill for PR code quality review
 ```
+
+---
+
+## Claude Code skills
+
+Project-level slash commands available when working in this repo with Claude Code.
+
+| Skill | Command | What it does |
+|---|---|---|
+| PR review | `/pr-review` | Reviews the current branch diff for bugs, security issues, complexity, and missing edge cases. Groups findings by severity and returns an approve / request-changes verdict. |

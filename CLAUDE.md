@@ -238,6 +238,18 @@ All optional variables have safe defaults. Required variables are marked *.
 
 ---
 
+## Claude Code skills
+
+Project-level slash commands in `.claude/skills/`. Available in any Claude Code session opened in this repo.
+
+| File | Command | Purpose |
+|------|---------|---------|
+| `pr-review.md` | `/pr-review` | Reviews current branch diff for bugs, security issues, complexity, and missing edge cases — grouped by severity with a final verdict |
+
+To add a new Claude Code skill: create `.claude/skills/<name>.md` with a YAML frontmatter block (`name`, `description`) followed by the skill instructions in Markdown.
+
+---
+
 ## Adding a new skill
 
 1. Create `skills/my_skill.py` and define a `skill = Skill(...)` instance with
