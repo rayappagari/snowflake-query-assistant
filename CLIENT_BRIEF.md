@@ -138,20 +138,36 @@ Every result is automatically scanned for personally identifiable information �
 ## Governance & Audit
 
 ### Full Audit Trail
-Every query is permanently logged. Each record captures:
+Every query is permanently logged the moment it completes — automatically, with no user action required. Logs are written to three destinations simultaneously to ensure nothing is lost:
+
+| Destination | When active | Survives restarts? |
+|---|---|---|
+| **PostgreSQL** | When a PostgreSQL service is connected | Yes — primary persistent store |
+| **SQLite** | Always (built-in fallback) | Within deployment; attach a volume for full persistence |
+| **Stdout / log aggregator** | Always | Yes — captured by Railway logs or any log platform |
+
+Each log entry records:
 
 | Field | What is recorded |
 |---|---|
-| **User** | Who asked the question |
-| **Question** | The exact plain-English question |
-| **SQL** | The query that was generated and executed |
-| **Rows** | How many rows were returned |
-| **Latency** | How long the query took (milliseconds) |
-| **Cache** | Whether the result was served from cache |
-| **PII** | Whether sensitive data was detected in the result |
-| **Status** | Success or failure, with error detail |
+| **Timestamp** | Exact UTC time the query completed |
+| **User** | Username of the person who asked |
+| **Question** | The exact plain-English question typed |
+| **SQL** | The query that was generated and executed against Snowflake |
+| **Rows returned** | How many rows came back |
+| **Latency** | Full pipeline wall-clock time in milliseconds |
+| **Cache hit** | Whether Snowflake was bypassed (result served from cache) |
+| **PII detected** | Types of sensitive data found in the result (email, SSN, phone, credit card) |
+| **Status** | Success or failure, with full error detail on failure |
 
-Audit logs are viewable in real time from the Audit tab in the application.
+Audit logs are viewable in real time from the **Audit tab** in the application sidebar, showing the 100 most recent entries. PostgreSQL is queried first when available; SQLite is used as fallback so the audit view always returns data.
+
+### What This Means for Compliance
+- Every data access is traceable to a named individual
+- The exact SQL executed is preserved — not just the question
+- PII exposure events are flagged automatically and timestamped
+- Logs cannot be modified by end users — they are append-only
+- All log destinations are written before the response is returned to the user
 
 ### Rate Limiting
 Each user is limited to 20 requests per minute to prevent overuse. Users who exceed the limit receive a clear message with a countdown.
