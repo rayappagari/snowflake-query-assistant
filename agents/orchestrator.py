@@ -51,6 +51,7 @@ from agents.validator import validate_sql
 from db.connection import execute_query
 from db.redis_client import get_client as _redis
 from db.result_cache import result_cache
+from skills import match_skill
 
 MAX_RETRIES = 3
 _Q_CACHE_TTL = int(os.environ.get("RESULT_CACHE_TTL", "300"))
@@ -149,12 +150,15 @@ def answer_question(question: str, verbose: bool = True) -> str:
     schema = identify_relevant_schema(question)
     model = choose_model(question)
     log(f"[router] selected model: {model}")
+    skill = match_skill(question)
+    if skill:
+        log(f"[skills] matched skill: {skill.name}")
 
     last_error: str | None = None
 
     for attempt in range(1, MAX_RETRIES + 1):
         log(f"[sql_gen] generating SQL (attempt {attempt}/{MAX_RETRIES})...")
-        sql = generate_sql(question, schema, previous_error=last_error, model=model)
+        sql = generate_sql(question, schema, previous_error=last_error, model=model, skill=skill)
         log(f"[sql_gen] → {sql}")
 
         log("[validator] checking SQL...")
@@ -169,7 +173,7 @@ def answer_question(question: str, verbose: bool = True) -> str:
         cached = result_cache.get(sql)
         if cached is not None:
             log(f"[cache] hit — {len(cached)} row(s)")
-            return interpret_results(question, sql, cached, model=model)
+            return interpret_results(question, sql, cached, model=model, skill=skill)
 
         log("[execute] running query against Snowflake...")
         try:
@@ -183,7 +187,7 @@ def answer_question(question: str, verbose: bool = True) -> str:
             continue
 
         log(f"[interpreter] summarising {len(results)} row(s)...")
-        return interpret_results(question, sql, results, model=model)
+        return interpret_results(question, sql, results, model=model, skill=skill)
 
     return (
         f"I could not produce a working query after {MAX_RETRIES} attempts. "
@@ -218,6 +222,7 @@ def answer_question_full(
     # ── Pipeline ──────────────────────────────────────────────────────────────
     schema = identify_relevant_schema(question)
     model = choose_model(question)
+    skill = match_skill(question)
     last_error: str | None = None
 
     for attempt in range(1, MAX_RETRIES + 1):
@@ -226,6 +231,7 @@ def answer_question_full(
             previous_error=last_error,
             history=history,
             model=model,
+            skill=skill,
         )
 
         valid, validation_msg = validate_sql(sql)
@@ -248,7 +254,7 @@ def answer_question_full(
         # ── Layer 2: SQL cache ────────────────────────────────────────────────
         cached_sql = result_cache.get(sql)
         if cached_sql is not None:
-            answer = interpret_results(question, sql, cached_sql, history=history, model=model)
+            answer = interpret_results(question, sql, cached_sql, history=history, model=model, skill=skill)
             serialised = [_jsonify(r) for r in cached_sql]
             result = QueryResult(
                 answer=answer,
@@ -269,7 +275,7 @@ def answer_question_full(
             last_error = f"Execution error: {last_error}"
             continue
 
-        answer = interpret_results(question, sql, rows, history=history, model=model)
+        answer = interpret_results(question, sql, rows, history=history, model=model, skill=skill)
         serialised = [_jsonify(r) for r in rows]
         result = QueryResult(
             answer=answer,

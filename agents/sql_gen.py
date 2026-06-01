@@ -14,6 +14,7 @@ the 5-minute Anthropic prompt-cache TTL window.
 import anthropic
 
 from agents.router import OPUS
+from skills.base import Skill
 
 _client = anthropic.Anthropic()
 
@@ -43,6 +44,7 @@ def generate_sql(
     previous_error: str | None = None,
     history: list[dict] | None = None,
     model: str = OPUS,
+    skill: Skill | None = None,
 ) -> str:
     """
     Generate a Snowflake SQL query for `question` given `schema`.
@@ -52,8 +54,15 @@ def generate_sql(
     previous_error  Error from the last attempt; appended so the model can fix it.
     history         Last N conversation turns for follow-up question resolution.
     model           Claude model ID from agents.router (Haiku or Opus).
+    skill           Optional domain skill; injects prompt and SQL hints.
     """
     user_content = f"Schema:\n{schema}\n\n"
+
+    if skill:
+        user_content += (
+            f"Domain context ({skill.name}):\n{skill.prompt_hint}\n\n"
+            f"Helpful SQL patterns:\n{skill.sql_hint}\n\n"
+        )
 
     if history:
         user_content += (

@@ -84,6 +84,12 @@ QueryResult (answer, sql, rows, row_count, cache_hit, pii_detected)
 Each stage is a **plain synchronous function call** — no framework, no message
 bus, no async.
 
+After `choose_model()`, the orchestrator also calls `skills/router.py:match_skill()`
+to detect whether the question belongs to a known domain. If a skill is matched,
+its `prompt_hint` and `sql_hint` are injected into the `sql_gen` and `interpreter`
+user messages, giving those agents domain-specific guidance without changing their
+system prompts (which remain prompt-cache-friendly).
+
 ---
 
 ## Module reference
@@ -119,6 +125,17 @@ bus, no async.
 | `main.py` | FastAPI app — auth, rate limiting, PII scan, audit, SPA serving |
 | `rate_limit.py` | Per-IP sliding-window rate limiter |
 
+### skills/
+
+| File | Purpose |
+|------|---------|
+| `base.py` | `Skill` dataclass — `name`, `prompt_hint`, `sql_hint`, `keywords`, optional `postprocess` |
+| `router.py` | `match_skill(question)` — keyword scoring, returns best `Skill` or `None` |
+| `revenue_trend.py` | Revenue, sales, YoY/MoM/QoQ trend analysis |
+| `customer_segmentation.py` | RFM analysis, LTV, churn, top-N customers |
+| `inventory_analysis.py` | Stockout risk, turnover rate, reorder alerts |
+| `cohort_analysis.py` | Retention cohorts, funnel conversion, drop-off |
+
 ---
 
 ## Key design decisions
@@ -139,6 +156,15 @@ complex and returns a model ID. The same model is used for both `sql_gen` and
 
 Simple (Haiku): `list tables`, `count rows`, `what are the columns in X`
 Complex (Opus): aggregations, trends, year-over-year, multi-table analysis
+
+### Skills system
+`skills/router.py:match_skill()` runs after model routing in the orchestrator.
+It scores each registered skill by counting keyword hits in the lowercased question
+and returns the highest-scoring skill (minimum 1 hit required). When matched, the
+skill's `prompt_hint` and `sql_hint` are appended to the user message in `sql_gen`
+and `interpreter` — the system prompt is untouched so Anthropic prompt caching
+remains effective. Unmatched questions (`None`) fall through to the generic agents
+unchanged.
 
 ### Result caching
 Cache key = SHA-256 of normalised SQL (lowercased, whitespace-collapsed).
@@ -205,6 +231,29 @@ All optional variables have safe defaults. Required variables are marked *.
 | `CB_RECOVERY_TIMEOUT` | `60` | Seconds before recovery probe |
 
 ---
+
+## Adding a new skill
+
+1. Create `skills/my_skill.py` and define a `skill = Skill(...)` instance with
+   `name`, `description`, `keywords`, `prompt_hint`, and `sql_hint`.
+2. Add `my_skill.skill` to the `_SKILLS` list in `skills/router.py`.
+3. Optionally set `postprocess` to a `(list[dict]) -> list[dict]` function if
+   rows need transformation before interpretation (e.g. currency formatting).
+
+No changes to agents or orchestrator are needed.
+
+```python
+# skills/my_skill.py
+from skills.base import Skill
+
+skill = Skill(
+    name="my_skill",
+    description="One-line description",
+    keywords=["keyword1", "keyword2"],
+    prompt_hint="What the model should focus on for this domain.",
+    sql_hint="-- Relevant SQL patterns for this domain",
+)
+```
 
 ## Adding a new agent
 

@@ -11,6 +11,7 @@ from typing import Any
 import anthropic
 
 from agents.router import OPUS
+from skills.base import Skill
 
 _client = anthropic.Anthropic()
 
@@ -32,6 +33,7 @@ def interpret_results(
     results: list[dict[str, Any]],
     history: list[dict] | None = None,
     model: str = OPUS,
+    skill: Skill | None = None,
 ) -> str:
     """
     Produce a plain-language summary of `results`.
@@ -40,19 +42,23 @@ def interpret_results(
     ----------
     history     Last N conversation turns; helps the model reference prior answers.
     model       Claude model ID from agents.router.
+    skill       Optional domain skill; injects analysis focus hint and postprocesses rows.
     """
     if not results:
         return "The query returned no results."
 
-    preview = results[:_MAX_ROWS_TO_MODEL]
+    rows = skill.postprocess(results) if (skill and skill.postprocess) else results
+    preview = rows[:_MAX_ROWS_TO_MODEL]
     rows_text = "\n".join(str(row) for row in preview)
     truncation = (
-        f"\n(Showing first {_MAX_ROWS_TO_MODEL} of {len(results)} total rows.)"
-        if len(results) > _MAX_ROWS_TO_MODEL
+        f"\n(Showing first {_MAX_ROWS_TO_MODEL} of {len(rows)} total rows.)"
+        if len(rows) > _MAX_ROWS_TO_MODEL
         else ""
     )
 
     content = ""
+    if skill:
+        content += f"Analysis focus ({skill.name}):\n{skill.prompt_hint}\n\n"
     if history:
         prior = "\n".join(
             f"- Q: {t['question']} → {t['answer']}"
