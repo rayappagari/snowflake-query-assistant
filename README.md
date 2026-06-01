@@ -13,6 +13,7 @@ Ask questions about your Snowflake data in plain English. A multi-agent pipeline
 |---|---|
 | **Natural language queries** | Ask anything — no SQL knowledge required |
 | **Conversation memory** | Follow-up questions resolve correctly ("filter that by region", "now just the top 3") |
+| **Domain skills** | Keyword-matched skills inject domain-specific SQL patterns and analysis guidance for revenue, customers, inventory, cohorts, and coding standards |
 | **Model routing** | Simple lookups use Haiku; complex analytics use Opus 4.8 — automatically |
 | **Result caching** | Identical SQL skips Snowflake entirely; ⚡ badge shown on cached responses |
 | **Syntax-highlighted SQL** | Collapsible SQL block with highlight.js |
@@ -47,8 +48,9 @@ flowchart TD
     subgraph Agents ["Multi-Agent Pipeline"]
         direction TB
         R["🧭 Router\n─────────\nHaiku vs Opus 4.8\n(regex heuristic)"]
+        SK["🎯 Skills Router\n─────────────\nKeyword match →\ndomain skill"]
         A["🔍 Schema Agent\n─────────────\nFilters INFORMATION_SCHEMA\n(Claude Haiku)"]
-        B["✍️ SQL Gen\n─────────────\nSELECT query +\nconversation context"]
+        B["✍️ SQL Gen\n─────────────\nSELECT query +\nconversation context\n+ skill hints"]
         C{"🔎 Validator\n─────────────\n1. Read-only check\n2. Snowflake EXPLAIN"}
         CA["🗄️ Result Cache\n─────────────\nRedis / in-process TTL\n(skip Snowflake on hit)"]
         D["⚙️ Executor\n─────────────\nSnowflake via pool\n+ circuit breaker"]
@@ -64,7 +66,8 @@ flowchart TD
     User --> AM
     AM -- JWT mode --> JWT --> R
     AM -- password mode --> PW --> R
-    R --> A --> B --> C
+    R --> SK
+    SK --> A --> B --> C
     C -- blocked --> Result
     C -- "invalid (retry ×3)" --> B
     C -- valid --> CA
@@ -82,11 +85,12 @@ Each stage is a plain synchronous function call — no framework, no message bus
 | Agent | Model | Role |
 |---|---|---|
 | Router | — | Regex heuristic selects Haiku or Opus per query |
+| Skills Router | — | Keyword scoring selects a domain skill (revenue, customers, inventory, cohorts, coding standards) or none |
 | Schema | Haiku | Filters `INFORMATION_SCHEMA` to relevant tables |
-| SQL Gen | Haiku / Opus 4.8 | Writes a `SELECT` query; uses last 5 conversation turns |
+| SQL Gen | Haiku / Opus 4.8 | Writes a `SELECT` query; injects skill hints + last 5 conversation turns |
 | Validator | — | Enforces read-only; then runs Snowflake `EXPLAIN` |
 | Error Recovery | Opus 4.8 | Rewrites SQL on execution failure |
-| Interpreter | Haiku / Opus 4.8 | Summarises results; uses last 3 conversation turns |
+| Interpreter | Haiku / Opus 4.8 | Summarises results with skill analysis focus; uses last 3 conversation turns |
 | PII Scanner | — | Regex scan for email, SSN, phone, credit card |
 
 ---
@@ -267,12 +271,20 @@ Railway dashboard → New Service → Database → Redis
 agents/
   schema.py           # table discovery (Haiku)
   router.py           # model complexity routing (Haiku vs Opus)
-  sql_gen.py          # SQL generation with conversation history
+  sql_gen.py          # SQL generation with conversation history + skill hints
   validator.py        # read-only enforcement + EXPLAIN validation
-  interpreter.py      # results summarisation with conversation history
+  interpreter.py      # results summarisation with conversation history + skill focus
   error_recovery.py   # SQL correction on execution failure
   pii.py              # PII detection (email, SSN, phone, credit card)
   orchestrator.py     # pipeline coordinator, retry logic, cache integration
+skills/
+  base.py             # Skill dataclass (name, prompt_hint, sql_hint, keywords, postprocess)
+  router.py           # match_skill() — keyword scoring → domain skill or None
+  revenue_trend.py    # revenue, sales, YoY/MoM/QoQ trend analysis
+  customer_segmentation.py  # RFM, LTV, churn, top-N customers
+  inventory_analysis.py     # stockout risk, turnover rate, reorder alerts
+  cohort_analysis.py        # retention cohorts, funnel conversion, drop-off
+  coding_standards.py       # SQL/schema naming conventions, anti-patterns, quality audits
 api/
   main.py             # FastAPI app — auth, rate limiting, PII scan, audit, SPA
   auth.py             # JWT auth, full user CRUD, /auth/* routes

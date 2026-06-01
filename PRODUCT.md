@@ -41,6 +41,21 @@ Type questions the way you would ask a colleague. No SQL, no training required.
 
 ---
 
+### Domain-aware analysis
+The assistant recognises the type of question being asked and applies specialist knowledge automatically — no extra configuration required.
+
+| Domain | Activates when you ask about… | What it adds |
+|---|---|---|
+| **Revenue & trends** | Sales, profit, YoY/MoM/QoQ growth, quarterly performance | Period-over-period comparisons, growth rate calculations, outlier flags |
+| **Customer analysis** | Top customers, churn, lifetime value, segmentation | RFM scoring, spend quartiles, recency and frequency metrics |
+| **Inventory** | Stock levels, turnover, reorder alerts, supply chain | Days-of-supply calculations, stockout risk, slow-moving SKU identification |
+| **Cohort & funnel** | Retention rates, funnel drop-off, conversion, onboarding | Cohort bucketing, per-stage conversion rates, largest drop-off identification |
+| **Coding standards** | Naming conventions, schema quality, anti-patterns | Flags non-snake_case names, missing primary keys, overly wide tables, generic column names |
+
+This happens invisibly. You ask a normal question; the assistant silently selects the right domain lens and returns a richer, more targeted answer.
+
+---
+
 ### Conversational follow-ups
 The assistant remembers the context of your conversation, so you can refine results naturally without starting over.
 
@@ -136,7 +151,7 @@ The assistant automatically selects the most appropriate AI model for each quest
 - **Simple lookups** (e.g. *"list all tables"*, *"count rows"*) → faster, lower-cost model
 - **Complex analytics** (e.g. *"year-over-year trend by product category"*) → most capable model
 
-This happens invisibly — users always get the best answer at the lowest cost.
+Simultaneously, it detects the domain of the question and activates a matching specialist skill — injecting the right SQL patterns and analysis focus without any user input. Both choices happen invisibly; users always get the most accurate answer at the lowest cost.
 
 ### Result caching
 If the same question generates the same database query within a 5-minute window, the result is served instantly from cache rather than running against Snowflake again. This reduces query costs and response time. A ⚡ badge is shown on cached responses.
