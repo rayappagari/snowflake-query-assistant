@@ -6,7 +6,7 @@ scoring. Returns None when no skill reaches a minimum confidence threshold,
 letting the generic agents handle the question unchanged.
 """
 
-from skills import cohort_analysis, coding_standards, customer_segmentation, inventory_analysis, revenue_trend
+from skills import cohort_analysis, coding_standards, customer_segmentation, inventory_analysis, performance_optimization, revenue_trend
 from skills.base import Skill
 
 _SKILLS: list[Skill] = [
@@ -15,6 +15,7 @@ _SKILLS: list[Skill] = [
     inventory_analysis.skill,
     cohort_analysis.skill,
     coding_standards.skill,
+    performance_optimization.skill,
 ]
 
 # Minimum keyword hits required before a skill is applied
